@@ -4,7 +4,7 @@
 
 ## Overview
 
-This project extends my on-prem Active Directory lab (`holl.domain`) into Microsoft's cloud security stack. I ship endpoint and identity telemetry into **Microsoft Sentinel**, re-run the **same attack chain from [Part 5](https://github.com/TannerHollaway/Settinup-Up-Splunk-and-Simulating-attacks)** (recon, Kerberoasting, privilege creep, PsExec lateral movement), and detect it in **KQL**.
+This project extends my on-prem Active Directory lab (`holl.domain`) into Microsoft's cloud security stack. I ship endpoint and identity telemetry into **Microsoft Sentinel**, re-run the **same attack chain from my [Splunk lab](https://github.com/TannerHollaway/Settinup-Up-Splunk-and-Simulating-attacks)** (Part 5 of the series: recon, Kerberoasting, privilege creep, PsExec lateral movement), and detect it in **KQL**.
 
 **The headline:** the same attacks detected in two SIEMs — **Splunk SPL vs Sentinel KQL, side by side**
 
@@ -25,7 +25,7 @@ This project extends my on-prem Active Directory lab (`holl.domain`) into Micros
 | DC01 | Domain Controller + DNS (Windows Server 2022) | 10.10.10.10 | Security, Sysmon → Splunk + Sentinel |
 | FS01 | File Server (Windows Server 2022) | 10.10.10.20 | Security, Sysmon → Splunk + Sentinel |
 | CLIENT01 | Workstation (Windows 11 VM) | DHCP (VLAN 10) | Security, Sysmon → Splunk + Sentinel |
-| siem | Splunk Enterprise (Ubuntu) — from Part 5 | 10.10.10.30 | Receiver |
+| siem | Splunk Enterprise (Ubuntu) — from the Splunk lab | 10.10.10.30 | Receiver |
 | KALI | Attacker (Impacket, hashcat) | 10.10.10.117 and .164 (multi-homed) | — |
 
 **Domain:** `holl.domain` (NetBIOS `HOLL`) — VLAN 10, `10.10.10.0/24`
@@ -72,9 +72,11 @@ flowchart LR
 | Azure subscription | Azure free account ($200 / 30 days) | 2026-10-09 | 2026-11-08 |
 | Sentinel free trial (31 days, 10 GB/day) | New Log Analytics workspace `law-holl-sentinel` | 2026-10-09 | ~2026-11-09 |
 
-### Detections to port (from Part 5)
+The lab was torn down on 2026-10-12, before any of these clocks ran out.
 
-| Part 5 alert (SPL) | ATT&CK | Primary source | Sentinel status |
+### Detections to port (from the Splunk lab)
+
+| Splunk lab alert (SPL) | ATT&CK | Primary source | Sentinel status |
 |---|---|---|---|
 | Brute Force - Excessive Failed Logons | T1110 | 4625 | ✅ rule built (Part 3), fired on re-run |
 | Kerberoasting - RC4 Service Ticket Request | T1558.003 | 4769 `0x17` | ✅ rule built (Part 3), fired on re-run |
@@ -86,16 +88,17 @@ flowchart LR
 ### Design decisions
 - **Defender portal, not Azure portal.** Microsoft is retiring Sentinel in the Azure portal (March 31, 2027), and new workspaces are onboarded to the Defender portal automatically. Building here reflects how SOCs will operate Sentinel going forward.
 - **Dual-ship to Splunk and Sentinel.** Splunk stays running so each attack lands in both SIEMs at the same moment, which makes the SPL-vs-KQL comparison exact.
-- **Same ATT&CK IDs and alert names as Part 5**, so the comparison table lines up one-to-one.
-- **No E5 — Sysmon carries endpoint telemetry.** Microsoft 365 E5 isn't offered as a public trial, and Defender for Endpoint's raw `Device*` tables require Plan 2. The core of this project doesn't need them: all six Part 5 detections run on Windows Security and Sysmon events, which reach Sentinel through Azure Arc + the Azure Monitor Agent with only an Azure subscription. Entra sign-in logs (requires Entra ID P1) are an optional add-on.
-- **Defender for Identity excluded — hardware constraint.** Microsoft requires at least 2 cores and 6 GB of RAM on the domain controller for the sensor. DC01 (physical, Intel N3540, 4.6 GB RAM, not upgradeable) falls below that. Running the sensor unsupported risks silent gaps: a missed detection would be indistinguishable from a starved sensor. Identity coverage comes from DC Security events (4768/4769/4728/4625) via Sentinel instead. The Part 5 LDAP-recon visibility gap remains open and is documented as such.
+- **Same ATT&CK IDs and alert names as the Splunk lab**, so the comparison table lines up one-to-one.
+- **No E5 — Sysmon carries endpoint telemetry.** Microsoft 365 E5 isn't offered as a public trial, and Defender for Endpoint's raw `Device*` tables require Plan 2. The core of this project doesn't need them: all six Splunk-lab detections run on Windows Security and Sysmon events, which reach Sentinel through Azure Arc + the Azure Monitor Agent with only an Azure subscription. Entra sign-in logs (requires Entra ID P1) are an optional add-on.
+- **Defender for Identity excluded — hardware constraint.** Microsoft requires at least 2 cores and 6 GB of RAM on the domain controller for the sensor. DC01 (physical, Intel N3540, 4.6 GB RAM, not upgradeable) falls below that. Running the sensor unsupported risks silent gaps: a missed detection would be indistinguishable from a starved sensor. Identity coverage comes from DC Security events (4768/4769/4728/4625) via Sentinel instead. The Splunk lab's LDAP-recon visibility gap remains open and is documented as such.
+
 ### Pre-build troubleshooting
 
 | # | Symptom | Cause | Resolution |
 |---|---|---|---|
 | 1 | CLIENT01 missing from VirtualBox Manager | Original VM lost or corrupted | Restored from an existing VirtualBox clone. Verified before trusting it: hostname, `Test-ComputerSecureChannel` = True (machine account password still valid with the DC), `gpresult` showing the correct OU and all five GPOs applied, Sysmon running. |
-| 2 | Restored CLIENT01 had no Splunk forwarder | Clone predated the Part 5 forwarder install | Reinstalled the Universal Forwarder pointing at `10.10.10.30:9997` with the Part 5 `inputs.conf`. |
-| 3 | After reinstall, only Security reached Splunk — no Sysmon | Installer defaulted to a virtual service account; the Sysmon log only grants read to SYSTEM/Administrators (same issue as Part 5) | Set the `SplunkForwarder` service to log on as Local System and restarted it. Verified both sources in `index=windows`. |
+| 2 | Restored CLIENT01 had no Splunk forwarder | Clone predated the Splunk lab's forwarder install | Reinstalled the Universal Forwarder pointing at `10.10.10.30:9997` with the Splunk lab's `inputs.conf`. |
+| 3 | After reinstall, only Security reached Splunk — no Sysmon | Installer defaulted to a virtual service account; the Sysmon log only grants read to SYSTEM/Administrators (same issue as in the Splunk lab) | Set the `SplunkForwarder` service to log on as Local System and restarted it. Verified both sources in `index=windows`. |
 | 4 | Defender portal listed two workspaces named `law-holl-sentinel` after a typo'd resource group was deleted and recreated | Deleting the resource group removed the Azure resources, but the Defender portal kept the old workspace connection | Disconnected the stale workspace in Defender portal Settings → Microsoft Sentinel → Workspaces; confirmed the remaining one (`rg-holl-sentinel`) is Primary and Connected. |
 
 ---
@@ -141,8 +144,8 @@ Returned rows for DC01, FS01, and CLIENT01 in both tables (2026-10-10). End-to-e
 ![FS01 Sysmon events by Event ID](screenshots/P1-04-fs01-sysmon-flowing.png)
 *FS01 Sysmon in the `Event` table, broken out by Event ID — including Event ID 11 (file create), the data the PsExec detection runs on.*
 
-![DCR visualizer — all three hosts collecting](screenshots/P1-09-dcr-visualizer.png)
-*The DCR visualizer: DC01, FS01, and CLIENT01 (3/3 collecting) flowing through both rules into `law-holl-sentinel`.*
+![DCR visualizer](screenshots/P1-09-dcr-visualizer.png)
+*The DCR visualizer, captured while onboarding was in progress: DC01 and FS01 (2/2 collecting at the time) flowing through both rules into `law-holl-sentinel`. CLIENT01 was added afterwards; the Verification query above returned rows for all three hosts.*
 
 ### Design notes
 - **Sysmon in its own table.** Sysmon goes to `Event`, kept separate from the Windows Security log in `SecurityEvent`.
@@ -159,7 +162,7 @@ Returned rows for DC01, FS01, and CLIENT01 in both tables (2026-10-10). End-to-e
 
 ## Part 2 — Attack Chain Re-run
 
-The six Part 5 attacks were re-run from Kali (and CLIENT01) and confirmed landing in **both** Splunk and Sentinel, matching on timestamp and key fields. Attacks were run in kill-chain order; privilege creep (#2) runs before the Kali attacks because Kerberoast and PsExec authenticate as the HR user it elevates.
+The six Splunk-lab attacks were re-run from Kali (and CLIENT01) and confirmed landing in **both** Splunk and Sentinel, matching on timestamp and key fields. Attacks were run in kill-chain order; privilege creep (#2) runs before the Kali attacks because Kerberoast and PsExec authenticate as the HR user it elevates.
 
 | # | Attack | ATT&CK | Signal (both SIEMs) | UTC |
 |---|---|---|---|---|
@@ -170,32 +173,21 @@ The six Part 5 attacks were re-run from Kali (and CLIENT01) and confirmed landin
 | 5 | PsExec to FS01 | T1021.002 | Sysmon 11, `.exe` dropped to `C:\Windows\` | 21:21:29 |
 | 6 | Tier 0 Logon on CLIENT01 | T1078.002 | 4625 Status `0xC000015B` for jdoe-adm | 22:33:42 |
 
-![Timezone match — Splunk and Sentinel on the same event](screenshots/P2-01-timezone-match-splunk-sentinel.png)
-*Both SIEMs set to UTC: the same `whoami` on CLIENT01 reads `18:23:50.683` in Splunk and in Sentinel's `UtcTime` — identical to the millisecond, which is what makes the side-by-side comparison trustworthy.*
+*The Part 2 screenshots weren't kept when the lab was torn down. What each one showed is recorded below; the same events appear in the Part 3 alert screenshots and the Part 6 query evidence.*
 
-![T1098 privilege creep — 4728 in both SIEMs](screenshots/P2-02-privcreep-4728-both-siems.png)
-*#2 Privilege creep: `Administrator` adds ahernandez to Domain Admins — 4728 at `18:29:31.171` in both SIEMs.*
-
-![T1087 NTLM recon — 4624 in both SIEMs](screenshots/P2-03-recon-ntlm-4624-both-siems.png)
-*#3 Recon: the authentication footprint of `GetADUsers` — 4624 LogonType 3, NTLM, ahernandez from the Kali IP.*
-
-![T1558.003 Kerberoast — 4769 RC4 in both SIEMs](screenshots/P2-04-kerberoast-4769-both-siems.png)
-*#4 Kerberoast: 4769 for svc_sql with EncType `0x17` (RC4) against the AES-only domain. In Sentinel the encryption type had to be `extract()`-ed from the EventData XML; in Splunk it is a ready field.*
-
-![T1021.002 PsExec drop — Sysmon 11 in both SIEMs](screenshots/P2-05-psexec-drop-both-siems.png)
-*#5 Lateral movement: an `.exe` dropped to `C:\Windows\` on FS01 (Sysmon Event ID 11), caught by behavior — the Windows-root location — not the random binary name.*
-
-![T1078.002 Tier 0 logon — 4625 0xC000015B](screenshots/P2-06-tier0-logon-4625-both-siems.png)
-*#6 Tier 0 logon: jdoe-adm denied on CLIENT01 — 4625 Status `0xC000015B` (deny-GPO), distinct from the typo'd `joe-adm` attempts that logged `0xc000006d` (no such user).*
-
-![T1110 brute force — 4625 ×5](screenshots/P2-07-bruteforce-4625-both-siems.png)
-*#1 Brute force: a burst of failed logons against `bruteforce_test` on DC01, meeting the ≥5 threshold.*
+- Both SIEMs set to UTC: the same `whoami` on CLIENT01 reads `18:23:50.683` in Splunk and in Sentinel's `UtcTime` — identical to the millisecond, which is what makes the side-by-side comparison trustworthy.
+- #2 Privilege creep: `Administrator` adds ahernandez to Domain Admins — 4728 at `18:29:31.171` in both SIEMs.
+- #3 Recon: the authentication footprint of `GetADUsers` — 4624 LogonType 3, NTLM, ahernandez from the Kali IP.
+- #4 Kerberoast: 4769 for svc_sql with EncType `0x17` (RC4) against the AES-only domain. In Sentinel the encryption type had to be `extract()`-ed from the EventData XML; in Splunk it is a ready field.
+- #5 Lateral movement: an `.exe` dropped to `C:\Windows\` on FS01 (Sysmon Event ID 11), caught by behavior — the Windows-root location — not the random binary name.
+- #6 Tier 0 logon: jdoe-adm denied on CLIENT01 — 4625 Status `0xC000015B` (deny-GPO), distinct from the typo'd `joe-adm` attempts that logged `0xc000006d` (no such user).
+- #1 Brute force: a burst of failed logons against `bruteforce_test` on DC01, meeting the ≥5 threshold.
 
 ### Findings surfaced during the re-run
 
-- **Account identity mismatch.** The HR user's display name (`Alex Herrnandez`), logon name (`sAMAccountName`), and UPN (`ahernandez@holl.domain`) had three different spellings, so `Get-ADUser ahernandez` and the first Kali bind both failed while interactive login worked. Corrected the `sAMAccountName` to `ahernandez` for consistency with Part 5. A concrete case of "a matching name isn't a matching identity" — detections should key on SID/DN, not display strings.
+- **Account identity mismatch.** The HR user's display name (`Alex Herrnandez`), logon name (`sAMAccountName`), and UPN (`ahernandez@holl.domain`) had three different spellings, so `Get-ADUser ahernandez` and the first Kali bind both failed while interactive login worked. Corrected the `sAMAccountName` to `ahernandez` for consistency with the Splunk lab. A concrete case of "a matching name isn't a matching identity" — detections should key on SID/DN, not display strings.
 - **Multi-homed attacker.** Kali has two VLAN-10 interfaces (10.10.10.117 and 10.10.10.164); Impacket used whichever the OS routed through, so IP-scoped queries must match both.
-- **Defender stopped execution, not the drop — and a too-narrow search window nearly hid it.** Both PsExec drops were logged by Sysmon (Event ID 11): `ErqLhpbE.exe` from run 1 (Defender on) and `wIHYvJkZ.exe` from run 3 (Defender off), each written to `C:\Windows\` by `System`. Defender killed the remote shell on run 1, but the file-create still happened and was recorded. The first verification only surfaced run 3; a wider search the next day (while building the detection rule) found both. *Corrected finding:* an earlier version of this section concluded run 1 left no artifact — that was a search-scoping error, not a telemetry gap. The lesson is the one from Part 5's hunt: match the search window to the full incident span before treating an absence as real. Separately, service-install auditing (4697) is not enabled domain-wide, so the service-creation step of PsExec is not recorded in the Security log in either SIEM. *Backlog: enable Audit Security System Extension (4697), or collect System log 7045.*
+- **Defender stopped execution, not the drop — and a too-narrow search window nearly hid it.** Both PsExec drops were logged by Sysmon (Event ID 11): `ErqLhpbE.exe` from run 1 (Defender on) and `wIHYvJkZ.exe` from run 3 (Defender off), each written to `C:\Windows\` by `System`. Defender killed the remote shell on run 1, but the file-create still happened and was recorded. The first verification only surfaced run 3; a wider search the next day (while building the detection rule) found both. *Corrected finding:* an earlier version of this section concluded run 1 left no artifact — that was a search-scoping error, not a telemetry gap. The lesson is the one from the Splunk lab's hunt: match the search window to the full incident span before treating an absence as real. Separately, service-install auditing (4697) is not enabled domain-wide, so the service-creation step of PsExec is not recorded in the Security log in either SIEM. *Not enabled before teardown; enabling Audit Security System Extension (4697), or collecting System log 7045, is a recommendation in the Part 6 report.*
 - **Denied-logon precision.** Among the 4625s on CLIENT01, three were typo'd usernames (`joe-adm`, Status `0xc000006d` = no such user) and only the correctly-typed `jdoe-adm` produced `0xC000015B` (deny-GPO). Keying on the Status code, not the account name, isolates GPO-denied logons from fumbled passwords.
 
 ### SPL-vs-KQL differences found (feed Part 4)
@@ -207,11 +199,11 @@ The six Part 5 attacks were re-run from Kali (and CLIENT01) and confirmed landin
 
 ## Part 3 — Detection in KQL
 
-All six Part 5 Splunk detections were rebuilt as **Sentinel scheduled analytics rules**, reusing the exact alert names and ATT&CK IDs so the Part 4 comparison lines up one-to-one. Each rule runs every 5 minutes over a 5-minute window — the same cadence as the Part 5 cron alerts. Each query was tested in Logs against the Part 2 attack data before the rule was created, then the whole chain was re-run so the rules fired on live activity and produced incidents.
+All six Splunk-lab detections were rebuilt as **Sentinel scheduled analytics rules**, reusing the exact alert names and ATT&CK IDs so the Part 4 comparison lines up one-to-one. Each rule runs every 5 minutes over a 5-minute window, the cadence the Splunk lab documented for its alerts. (Part 4 found that two of the live Splunk alerts actually used wider windows.) Each query was tested in Logs against the Part 2 attack data before the rule was created, then the whole chain was re-run so the rules fired on live activity and produced incidents.
 
 ### The six rules
 
-| Rule (name = Part 5 name) | ATT&CK | Severity | Source | KQL notes |
+| Rule (name = Splunk-lab name) | ATT&CK | Severity | Source | KQL notes |
 |---|---|---|---|---|
 | Brute Force - Excessive Failed Logons | T1110 | Medium* | 4625 | `summarize count() by TargetUserName`, threshold ≥5 |
 | Kerberoasting - RC4 Service Ticket Request | T1558.003 | High | 4769 | encryption type parsed from `EventData` XML with `extract()` |
@@ -220,7 +212,7 @@ All six Part 5 Splunk detections were rebuilt as **Sentinel scheduled analytics 
 | Account Discovery - Anomalous NTLM Authentication | T1087 | Medium | 4624 Type 3 NTLM | excludes machine accounts and ANONYMOUS LOGON |
 | Lateral Movement - Executable Dropped to C:\Windows | T1021.002 | High | Sysmon 11 | anchored regex, Windows root only, case-insensitive |
 
-\* **T1110 lowered from High (Part 5) to Medium** — a handful of failed logons is the highest-base-rate false positive of the six (ordinary password fumbles), so it should sit below confirmed-malicious alerts in the queue. A password **spray** (few attempts across many accounts) or failures-followed-by-success would be higher-fidelity follow-up detections — noted as backlog.
+\* **T1110 lowered from High (Splunk lab) to Medium** — a handful of failed logons is the highest-base-rate false positive of the six (ordinary password fumbles), so it should sit below confirmed-malicious alerts in the queue. A password **spray** (few attempts across many accounts) or failures-followed-by-success would be higher-fidelity follow-up detections, left as future work.
 
 Each rule maps query fields to **entities** (Account, Host, IP, File), which is what lets Sentinel correlate alerts and build incident graphs — a layer Splunk's triggered-alert list doesn't have. The rule queries are exported under [`kql/`](kql/).
 
@@ -230,10 +222,10 @@ Re-running the full chain produced **10 alerts across all six rules** (T1087 fir
 
 ### Finding — one attack, ten incidents (alert fatigue)
 
-Every alert became its own incident, even though eight of the ten share the same account (ahernandez) or the same host (DC01). An analyst would face ten separate tickets for one intrusion. This is the alert-fatigue problem that the Part 5 correlation timeline solved by hand, and it motivates **alert grouping**: grouping repeat alerts from a single rule (by matching entities) collapses the duplicates. Grouping only operates *within* a rule, though — correlating *different* techniques into one incident is left to Defender's correlation engine, which did not link them here, or to the analyst during investigation (Part 6). Defender did auto-assign **priority scores** (Kerberoast 3, most 2, brute force 1), a built-in triage aid with no Splunk equivalent.
+Every alert became its own incident, even though eight of the ten share the same account (ahernandez) or the same host (DC01). An analyst would face ten separate tickets for one intrusion. This is the alert-fatigue problem that the Splunk lab's correlation timeline solved by hand, and it motivates **alert grouping**: grouping repeat alerts from a single rule (by matching entities) collapses the duplicates. Grouping only operates *within* a rule, though — correlating *different* techniques into one incident is left to Defender's correlation engine, which did not link them here, or to the analyst during investigation (Part 6). Defender did auto-assign **priority scores** (Kerberoast 3, most 2, brute force 1), a built-in triage aid with no Splunk equivalent.
 
 ![Six analytics rules in Sentinel](screenshots/P3-01-active-rules-overview.png)
-*The six custom scheduled rules — 4 High, 2 Medium — each mapped to its MITRE technique, mirroring the Part 5 Splunk alerts.*
+*The six custom scheduled rules — 4 High, 2 Medium — each mapped to its MITRE technique, mirroring the Splunk lab's alerts.*
 
 ![All six rules firing on the re-run](screenshots/P3-02-alerts-all-six-rules.png)
 *Alerts from the live re-run: every one of the six detections fired, with the correct entities (ahernandez, jdoe-adm, bruteforce_test, DC01, CLIENT01, FS01).*
@@ -243,7 +235,7 @@ Every alert became its own incident, even though eight of the ten share the same
 
 ## Part 4 — SPL vs KQL
 
-The same six detections, the same attack chain, two SIEMs. Splunk ran the unchanged Part 5 alerts; Sentinel ran the Part 3 rules. Both received the identical Windows Security and Sysmon events from the same three hosts.
+The same six detections, the same attack chain, two SIEMs. Splunk ran the unchanged Splunk-lab alerts; Sentinel ran the Part 3 rules. Both received the identical Windows Security and Sysmon events from the same three hosts.
 
 ### Results on the same run
 
@@ -259,7 +251,7 @@ The same six detections, the same attack chain, two SIEMs. Splunk ran the unchan
 The Splunk server was powered off during the run. When it came back, the Universal Forwarders delivered the backlog (events indexed ~77 minutes after they occurred) and five of six Splunk alerts still fired. Brute force did not — see *Lookback windows* below.
 
 ![Splunk triggered alerts on the same run](screenshots/P4-01-splunk-triggered-alerts.png)
-*Splunk's triggered alerts for the same chain, fired at 18:20 UTC as the backlog arrived — five of the six Part 5 detections.*
+*Splunk's triggered alerts for the same chain, fired at 18:20 UTC as the backlog arrived — five of the six Splunk-lab detections.*
 
 ### SPL vs KQL, per detection
 
@@ -329,14 +321,14 @@ Overall: SPL got detections working with less parsing because the add-ons do the
 
 ### Finding — lookback window decides whether late data is detected
 
-The one divergent result (brute force) came from alert *configuration*, not the query. Splunk's live alert settings turned out to vary per alert, and to differ from the Part 5 README:
+The one divergent result (brute force) came from alert *configuration*, not the query. Splunk's live alert settings turned out to vary per alert, and to differ from what the Splunk lab's README documented:
 
 | Splunk alert | Lookback window | Caught the 77-min-late backlog? |
 |---|---|---|
 | Kerberoasting | Last 24 hours | ✅ |
 | Brute Force | Last 15 minutes | ❌ — events fell outside the window |
 
-So Splunk survived its own downtime *only where the lookback was wide enough*. Sentinel's rules all use a 5-minute lookback and alerted in real time **because its cloud collection never stopped** — but the same tight window is a latent risk: if a Sentinel agent is offline for an hour (as CLIENT01's was one morning), its events would arrive outside the 5-minute window and never alert. *Tuning lesson for the Sentinel rules: widen the lookback (e.g. run every 5 min, look back 1 hour) and dedupe with alert grouping.* *(Note: the Part 5 repo documents these alerts as 5-minute windows; the live settings differ and that repo's README should be corrected.)*
+So Splunk survived its own downtime *only where the lookback was wide enough*. Sentinel's rules all use a 5-minute lookback and alerted in real time **because its cloud collection never stopped** — but the same tight window is a latent risk: if a Sentinel agent is offline for an hour (as CLIENT01's was one morning), its events would arrive outside the 5-minute window and never alert. *Tuning lesson for the Sentinel rules: widen the lookback (e.g. run every 5 min, look back 1 hour) and dedupe with alert grouping.* *(The Splunk lab's README originally documented both alerts as 5-minute windows; it now records the live values.)*
 
 The headline, in one line: **both SIEMs detected the same six-step intrusion from identical telemetry; the differences were in query ergonomics, the incident model, and how each handled late-arriving data — not in detection power.**
 
@@ -378,7 +370,7 @@ Run manually against incident 7 (T1558.003 Kerberoasting), the playbook posted:
 **Interpretation:** 10.10.10.117 is the lab attacker's private (RFC 1918) address, so AbuseIPDB has no history for it. `Public IP: False` says so outright. **"0% confidence" here means "no data," not "clean."** Microsoft's built-in entity reputation said the same thing (Unknown, 0/100). The playbook proves the pipeline end to end; the enrichment only becomes meaningful on public IPs. That's the honest limitation of reputation enrichment in an isolated lab, and a reminder that reputation never stands in for host evidence.
 
 ![Automation rule](screenshots/P5-06-automation-rule.png)
-*The automation rule, enabled. Created after the manual test above; not yet observed firing on a new incident.*
+*The automation rule, enabled. It was created after the manual test above and never observed firing on a new incident before the lab was torn down.*
 
 ### Troubleshooting
 
@@ -386,7 +378,7 @@ Run manually against incident 7 (T1558.003 Kerberoasting), the playbook posted:
 |---|---|---|---|
 | 1 | The first runs showed **Succeeded**, but the incident comment was blank | The comment field on `Add comment to incident (V3)` is a rich-text editor. It accepted the inline `concat()` expression in the UI but saved only an empty paragraph (`<p><br></p>`), confirmed in the action's code view. An empty comment is a valid post, so the run still succeeded. | Moved the expression into a **Compose** action (plain input) and inserted Compose's **Outputs** token into the comment. Lesson: **a green run isn't a correct result**; check the output, not just the status. |
 | 2 | Unsaved designer work lost | The browser crashed before **Save**; the designer keeps edits only in the open tab | Rebuilt the playbook and saved after each action. |
-| 3 | Automation rule includes T1110, whose incidents carry no IP | T1110 was scoped in on the assumption that it mapped an IP; its rule maps only the Account entity ([`kql/T1110-brute-force.kql`](kql/T1110-brute-force.kql)). Caught in the final review. | Harmless: on a T1110 incident, `Entities - Get IPs` returns nothing and the loop runs zero times. Fix: remove T1110 from the rule's conditions. *Open.* |
+| 3 | Automation rule includes T1110, whose incidents carry no IP | T1110 was scoped in on the assumption that it mapped an IP; its rule maps only the Account entity ([`kql/T1110-brute-force.kql`](kql/T1110-brute-force.kql)). Caught in the final review. | Harmless: on a T1110 incident, `Entities - Get IPs` returns nothing and the loop runs zero times. Fix: remove T1110 from the rule's conditions. *Not fixed before teardown; the exported rule in [`automation/`](automation/) still includes T1110.* |
 
 ![Run history](screenshots/P5-04-playbook-run-succeeded.png)
 *Run history from troubleshooting #1: both runs show **Succeeded**, and the later one posted the blank comment. The status proved the workflow ran, not that its output was right.*
@@ -415,14 +407,14 @@ The evidence screenshots (P6-01 to P6-08) are in the report, next to the finding
 | 4 | The first scope check covered only one attacker IP | Kali is multi-homed (.117 and .164) | Re-ran scope across both IPs with `has_any`; .164 showed no activity. |
 
 ### Teardown
-_Pending — before Azure credit ends (~Nov 8–9)._
+The lab was torn down on 2026-10-12, once the investigation was complete and before the Azure free credit ended (2026-11-08). What remains is this repo: the rule queries, the playbook and automation-rule exports, the incident report, and the screenshots. Anything listed above as open or recommended stays that way.
 
 ---
 
 ## Repository Structure
 ```
 ├── README.md
-├── screenshots/      # Evidence, numbered by part (e.g. P2-04-kerberoast-4769-both-siems.png)
+├── screenshots/      # Evidence, numbered by part (e.g. P3-01-active-rules-overview.png)
 ├── kql/              # Analytics rules, one .kql per detection
 │     ├── T1110-brute-force.kql
 │     ├── T1558.003-kerberoasting-rc4.kql
