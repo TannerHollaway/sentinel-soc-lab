@@ -1,6 +1,5 @@
 # Hybrid SOC Lab — Microsoft Sentinel + Azure Arc + Entra ID
 
-**Part 6 of a home lab series** — see [MyHomeLab](https://github.com/TannerHollaway/MyHomeLab).
 
 ## Overview
 
