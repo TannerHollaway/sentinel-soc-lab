@@ -149,7 +149,7 @@ Returned rows for DC01, FS01, and CLIENT01 in both tables (2026-10-10). End-to-e
 
 ### Design notes
 - **Sysmon in its own table.** Sysmon goes to `Event`, kept separate from the Windows Security log in `SecurityEvent`.
-- **CLIENT01 onboarded through Arc — a lab trade-off.** The Azure Monitor Agent's Windows client installer requires an Entra-joined device; CLIENT01 is joined only to on-prem AD. Microsoft supports Arc on Windows 10/11 in server-like environments, which an always-on lab VM fits. In production, workstations would be hybrid-joined and use the client installer.
+- **CLIENT01 onboarded later, I forgot to take a screenshot**
 - **Host naming differs between SIEMs.** Sentinel's `Computer` field holds the FQDN (`FS01.holl.domain`); Splunk's `host` holds the short name (`FS01`). Host filters must match each platform's format.
 
 ### Troubleshooting
