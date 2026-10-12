@@ -137,7 +137,7 @@ Negatives are only reported once the check behind them was shown to work.
 1. **Defender blocked or quarantined it.** Supported by MsMpEng touching the file 68 s after creation, and by Part 2's run 1, where Defender killed the remote shell. A prior observation from the earlier Splunk project in the same lab (not evidence from this run) also fits: there, Defender on FS01 blocked the same Impacket execution and left only the drop and the service. **One unknown weakens this:** Defender's real-time protection state on FS01 wasn't recorded for this run, and it had been turned off for Part 2's run 3.
 2. **It ran and Sysmon didn't log it.** Less likely, since Sysmon logged other process creations on FS01 in the same minutes (Q8b), but not ruled out.
 
-**What would settle it:** FS01 → Windows Security → Protection history, or the `Microsoft-Windows-Windows Defender/Operational` log (events 1116/1117) around 17:33 UTC. Until then, F5 stands at **creation**, not execution.
+**What would settle it:** FS01 → Windows Security → Protection history, or the `Microsoft-Windows-Windows Defender/Operational` log (events 1116/1117) around 17:33 UTC. The lab was torn down on 2026-10-12 before either was checked, so the question stays open and F5 stands at **creation**, not execution.
 
 ---
 
