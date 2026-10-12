@@ -1,0 +1,11 @@
+// T1087 - Account Discovery - Anomalous NTLM Authentication
+// Sentinel scheduled analytics rule | Severity: Medium
+// Run every 5 min, lookback 5 min | Alert per event
+// Entities: Account -> Name -> TargetUserName | Host -> HostName -> Computer | IP -> Address -> IpAddress
+// AD recon (GetADUsers) isn't logged directly (4662 off), so the detectable
+// footprint is the auth: a *user* NTLM network logon in a Kerberos-first domain.
+// Excludes machine accounts ($) and ANONYMOUS LOGON / "-".
+SecurityEvent
+| where EventID == 4624 and LogonType == 3 and AuthenticationPackageName =~ "NTLM"
+| where TargetUserName !endswith "$" and TargetUserName !in~ ("ANONYMOUS LOGON", "-")
+| project TimeGenerated, Computer, TargetUserName, IpAddress, LogonType, AuthenticationPackageName

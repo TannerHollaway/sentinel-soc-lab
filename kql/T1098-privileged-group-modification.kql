@@ -1,0 +1,9 @@
+// T1098 - Account Manipulation - Privileged Group Modification
+// Sentinel scheduled analytics rule | Severity: High
+// Run every 5 min, lookback 5 min | Alert per event
+// Entities: Account -> Name -> AddedBy | Host -> HostName -> Computer
+// 4728 = global group, 4732 = domain-local, 4756 = universal.
+// Fields are promoted to real columns in SecurityEvent (no XML parse needed).
+SecurityEvent
+| where EventID in (4728, 4732, 4756)
+| project TimeGenerated, Computer, Group = TargetUserName, MemberAdded = MemberName, AddedBy = SubjectUserName, EventID

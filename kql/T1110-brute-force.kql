@@ -1,0 +1,9 @@
+// T1110 - Brute Force - Excessive Failed Logons
+// Sentinel scheduled analytics rule | Severity: Medium
+// Run every 5 min, lookback 5 min | Group all events into a single alert
+// Entity: Account -> Name -> TargetUserName
+// Equivalent Splunk (Part 5): index=windows EventCode=4625 | stats count AS failed_attempts BY TargetUserName | where failed_attempts >= 5
+SecurityEvent
+| where EventID == 4625
+| summarize FailedAttempts = count(), Sources = make_set(IpAddress), Hosts = make_set(Computer), TimeGenerated = max(TimeGenerated) by TargetUserName
+| where FailedAttempts >= 5

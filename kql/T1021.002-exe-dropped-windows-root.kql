@@ -1,0 +1,14 @@
+// T1021.002 - Lateral Movement - Executable Dropped to C:\Windows
+// Sentinel scheduled analytics rule | Severity: High
+// Run every 5 min, lookback 5 min | Alert per event
+// Entities: Host -> HostName -> Computer | File -> Name -> TargetFilename
+// Sysmon (Event ID 11) lands in the Event table with details in RenderedDescription
+// as flat text (not XML tags), so fields are pulled with extract() on "Field: value".
+// Detection keys on the drop LOCATION (Windows root, not subfolders), not the file
+// name -- PsExec-style tools randomise the binary name. (?i) = case-insensitive.
+Event
+| where Source == "Microsoft-Windows-Sysmon" and EventID == 11
+| extend TargetFilename  = extract(@'TargetFilename:\s*(\S+)', 1, RenderedDescription)
+| extend WritingProcess  = extract(@'Image:\s*(\S+)', 1, RenderedDescription)
+| where TargetFilename matches regex @"(?i)^C:\\Windows\\[^\\]+\.exe$"
+| project TimeGenerated, Computer, TargetFilename, WritingProcess

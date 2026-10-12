@@ -1,0 +1,15 @@
+// T1558.003 - Kerberoasting - RC4 Service Ticket Request
+// Sentinel scheduled analytics rule | Severity: High
+// Run every 5 min, lookback 5 min | Alert per event
+// Entities: Account -> Name -> Requester | Host -> HostName -> Computer | IP -> Address -> SrcIP
+// Note: in Sentinel's SecurityEvent table the 4769 fields live inside EventData XML,
+// unlike Splunk where the add-on pre-extracts TicketEncryptionType as a field.
+// (?:::ffff:)? strips the IPv6-mapped prefix so the IP entity gets a clean IPv4.
+SecurityEvent
+| where EventID == 4769
+| extend EncType   = extract(@'Name="TicketEncryptionType">([^<]+)', 1, EventData)
+| extend Svc       = extract(@'Name="ServiceName">([^<]+)', 1, EventData)
+| extend Requester = extract(@'Name="TargetUserName">([^<]+)', 1, EventData)
+| extend SrcIP     = extract(@'Name="IpAddress">(?:::ffff:)?([^<]+)', 1, EventData)
+| where EncType =~ "0x17"   // RC4 in an AES-only domain = downgrade / roast
+| project TimeGenerated, Computer, Requester, Svc, EncType, SrcIP

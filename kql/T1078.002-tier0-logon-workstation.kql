@@ -1,0 +1,10 @@
+// T1078.002 - Valid Accounts Domain - Tier0 Logon Attempt on Workstation
+// Sentinel scheduled analytics rule | Severity: High
+// Run every 5 min, lookback 5 min | Alert per event
+// Entities: Account -> Name -> TargetUserName | Host -> HostName -> Computer
+// 0xC000015B = "logon type not granted" -> the Tier 0 deny-logon GPO blocked it.
+// =~ is case-insensitive: Sentinel stores the status lowercase (0xc000015b),
+// and KQL == is case-sensitive, so == "0xC000015B" would silently miss it.
+SecurityEvent
+| where EventID == 4625 and Status =~ "0xC000015B"
+| project TimeGenerated, Computer, TargetUserName, Status, LogonType

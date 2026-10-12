@@ -1,0 +1,50 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/AutomationRules/d7867b5b-2a2f-4615-a7ce-b8fa25ad9011')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d7867b5b-2a2f-4615-a7ce-b8fa25ad9011')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/AutomationRules",
+            "apiVersion": "2024-04-01-preview",
+            "properties": {
+                "displayName": "ar-enrich-ip-abuseipdb",
+                "order": 1,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentRelatedAnalyticRuleIds",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/', 'c5c0083f-080a-4e18-8c15-e15d37597cb6')]",
+                                    "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/', 'e601044b-4e80-483a-b95e-4f7a0fa75359')]",
+                                    "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/', 'fc0e11cf-9f0f-4788-b425-bff4e3f72948')]"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-holl-sentinel/providers/Microsoft.Logic/workflows/pb-enrich-ip-abuseipdb",
+                            "tenantId": "<TENANT_ID>"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

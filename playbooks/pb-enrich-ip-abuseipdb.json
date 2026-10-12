@@ -1,0 +1,129 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Microsoft_Sentinel_incident": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "path": "/incident-creation"
+                }
+            }
+        },
+        "actions": {
+            "Entities_-_Get_IPs": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                    "path": "/entities/ip"
+                }
+            },
+            "For_each": {
+                "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                "actions": {
+                    "HTTP": {
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "https://api.abuseipdb.com/api/v2/check",
+                            "method": "GET",
+                            "headers": {
+                                "Accept": "application/json",
+                                "Key": "<ABUSEIPDB_API_KEY>"
+                            },
+                            "queries": {
+                                "maxAgeInDays": "90",
+                                "ipAddress": "@{items('For_each')?['Address']}"
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            },
+                            "secureData": {
+                                "properties": [
+                                    "inputs",
+                                    "outputs"
+                                ]
+                            }
+                        }
+                    },
+                    "Add_comment_to_incident_(V3)": {
+                        "runAfter": {
+                            "Compose": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "message": "<p class=\"editor-paragraph\">@{outputs('Compose')}</p>"
+                            },
+                            "path": "/Incidents/Comment"
+                        }
+                    },
+                    "Compose": {
+                        "runAfter": {
+                            "HTTP": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@concat('AbuseIPDB enrichment - IP: ', items('For_each')?['Address'], ' | Confidence: ', string(body('HTTP')?['data']?['abuseConfidenceScore']), '% | Reports (90d): ', string(body('HTTP')?['data']?['totalReports']), ' | Public IP: ', string(body('HTTP')?['data']?['isPublic']))"
+                    }
+                },
+                "runAfter": {
+                    "Entities_-_Get_IPs": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "azuresentinel": {
+                    "id": "/subscriptions/<SUBSCRIPTION_ID>/providers/Microsoft.Web/locations/centralus/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-holl-sentinel/providers/Microsoft.Web/connections/azuresentinel-pb-enrich-ip-abuseipdb",
+                    "connectionName": "azuresentinel-pb-enrich-ip-abuseipdb",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
